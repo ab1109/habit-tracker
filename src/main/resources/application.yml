@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: habit-tracker
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/habit_tracker
+    username: habit_tracker
+    password: habit_tracker
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
