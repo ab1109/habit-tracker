@@ -1,5 +1,6 @@
 package com.habittracker.groups.api;
 
+import com.habittracker.common.api.CurrentUser;
 import com.habittracker.checkins.domain.LocalDateResolver;
 import com.habittracker.groups.application.GroupProgressService;
 import com.habittracker.groups.application.GroupService;
@@ -40,7 +41,7 @@ public class GroupController {
 
     @PostMapping
     public ResponseEntity<GroupResponse> createGroup(
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @Valid @RequestBody GroupRequests.CreateGroup request
     ) {
         Group group = groupService.createGroup(request.name(), userId, request.displayName());
@@ -48,19 +49,19 @@ public class GroupController {
     }
 
     @GetMapping
-    public List<GroupResponse> myGroups(@RequestHeader("X-User-Id") UUID userId) {
+    public List<GroupResponse> myGroups(@CurrentUser UUID userId) {
         return groupService.groupsOf(userId).stream().map(GroupResponse::from).toList();
     }
 
     @GetMapping("/{groupId}")
-    public GroupResponse getGroup(@PathVariable UUID groupId, @RequestHeader("X-User-Id") UUID userId) {
+    public GroupResponse getGroup(@PathVariable UUID groupId, @CurrentUser UUID userId) {
         return GroupResponse.from(groupService.getGroup(groupId, userId));
     }
 
     @PostMapping("/{groupId}/members")
     public GroupResponse addMember(
         @PathVariable UUID groupId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @Valid @RequestBody GroupRequests.AddMember request
     ) {
         return GroupResponse.from(groupService.addMember(groupId, userId, request.userId(), request.displayName()));
@@ -70,7 +71,7 @@ public class GroupController {
     public ResponseEntity<Void> removeMember(
         @PathVariable UUID groupId,
         @PathVariable UUID memberId,
-        @RequestHeader("X-User-Id") UUID userId
+        @CurrentUser UUID userId
     ) {
         groupService.removeMember(groupId, userId, memberId);
         return ResponseEntity.noContent().build();
@@ -79,7 +80,7 @@ public class GroupController {
     @PostMapping("/{groupId}/shared-habits")
     public ResponseEntity<Void> shareHabit(
         @PathVariable UUID groupId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @Valid @RequestBody GroupRequests.ShareHabit request
     ) {
         groupService.shareHabit(groupId, userId, request.habitId());
@@ -90,7 +91,7 @@ public class GroupController {
     public ResponseEntity<Void> unshareHabit(
         @PathVariable UUID groupId,
         @PathVariable UUID habitId,
-        @RequestHeader("X-User-Id") UUID userId
+        @CurrentUser UUID userId
     ) {
         groupService.unshareHabit(groupId, userId, habitId);
         return ResponseEntity.noContent().build();
@@ -99,7 +100,7 @@ public class GroupController {
     @PostMapping("/{groupId}/habits")
     public ResponseEntity<HabitResponse> createJointHabit(
         @PathVariable UUID groupId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @Valid @RequestBody CreateHabitRequest request
     ) {
         Habit habit = groupService.createJointHabit(groupId, userId, request.name(), request.toSchedule());
@@ -109,7 +110,7 @@ public class GroupController {
     @GetMapping("/{groupId}/progress")
     public GroupProgressResponse progress(
         @PathVariable UUID groupId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @RequestHeader("X-Timezone") String timezone
     ) {
         var today = LocalDateResolver.resolve(clock.instant(), ZoneId.of(timezone));

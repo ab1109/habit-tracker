@@ -68,7 +68,7 @@ class HabitProgressIntegrationTest extends AbstractIntegrationTest {
         createHabit(userId);
         String archived = createHabit(userId);
         createHabit(UUID.randomUUID());
-        mockMvc.perform(patch("/habits/" + archived + "/archive"));
+        mockMvc.perform(patch("/habits/" + archived + "/archive").header("X-User-Id", userId));
 
         mockMvc.perform(get("/habits").header("X-User-Id", userId))
             .andExpect(status().isOk())

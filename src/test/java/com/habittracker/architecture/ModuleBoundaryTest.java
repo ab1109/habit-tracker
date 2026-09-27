@@ -13,7 +13,7 @@ class ModuleBoundaryTest {
 
     private static final String BASE_PACKAGE = "com.habittracker";
 
-    private static final List<String> MODULES = List.of("habits", "checkins", "streaks", "groups", "notifications");
+    private static final List<String> MODULES = List.of("habits", "checkins", "streaks", "groups", "notifications", "users");
 
     @Test
     void modulesMustNotReachIntoAnotherModulesInfrastructurePackage() {

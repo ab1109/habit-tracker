@@ -1,11 +1,13 @@
+# Defaults are for local development (docker compose on 5433). Every setting a
+# deployment needs to change is read from an environment variable.
 spring:
   application:
     name: habit-tracker
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/habit_tracker
-    username: habit_tracker
-    password: habit_tracker
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:habit_tracker}
+    username: ${DB_USER:habit_tracker}
+    password: ${DB_PASSWORD:habit_tracker}
 
   jpa:
     hibernate:
@@ -15,3 +17,11 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+  autoconfigure:
+    # No username/password logins: users sign in with Google (the 'google'
+    # profile) or, locally, are identified by the X-User-Id header.
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+server:
+  port: ${PORT:8080}

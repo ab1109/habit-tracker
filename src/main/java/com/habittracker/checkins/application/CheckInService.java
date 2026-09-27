@@ -5,6 +5,7 @@ import com.habittracker.checkins.domain.CheckInRepository;
 import com.habittracker.checkins.domain.LocalDateResolver;
 import com.habittracker.common.domain.ForbiddenException;
 import com.habittracker.common.domain.OwnerType;
+import com.habittracker.habits.application.HabitAccessPolicy;
 import com.habittracker.habits.domain.Habit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -4,6 +4,8 @@ import com.habittracker.common.domain.DomainValidationException;
 import com.habittracker.common.domain.ForbiddenException;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +56,27 @@ class GroupTest {
         Group group = Group.create("Flat 4B", maya, "Maya").addMember(maya, dev, "Dev");
 
         assertThat(group.removeMember(maya, dev).isMember(dev)).isFalse();
+    }
+
+    @Test
+    void joiningThroughAnInviteNeedsNoExistingMembershipAndIsIdempotent() {
+        Group group = Group.create("Flat 4B", maya, "Maya");
+
+        Group joined = group.join(dev, "Dev");
+
+        assertThat(joined.isMember(dev)).isTrue();
+        assertThat(joined.join(dev, "Dev again")).isSameAs(joined);
+    }
+
+    @Test
+    void anInviteExpiresAfterSevenDays() {
+        Instant now = Instant.parse("2026-09-20T10:00:00Z");
+        GroupInvite invite = GroupInvite.create(UUID.randomUUID(), maya, now);
+
+        assertThat(invite.token()).hasSizeGreaterThanOrEqualTo(43);
+        assertThat(invite.isExpired(now.plus(Duration.ofDays(7)).minusSeconds(1))).isFalse();
+        assertThat(invite.isExpired(now.plus(Duration.ofDays(7)))).isTrue();
+        assertThat(GroupInvite.create(UUID.randomUUID(), maya, now).token()).isNotEqualTo(invite.token());
     }
 
     @Test

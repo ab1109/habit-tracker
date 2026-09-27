@@ -22,8 +22,9 @@ class HabitIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createThenFetchRoundTripsThroughRealPostgres() throws Exception {
+        UUID userId = UUID.randomUUID();
         String createResponse = mockMvc.perform(post("/habits")
-                .header("X-User-Id", UUID.randomUUID())
+                .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Meditate","scheduleType":"DAILY"}
@@ -35,15 +36,18 @@ class HabitIntegrationTest extends AbstractIntegrationTest {
 
         String id = JsonPath.read(createResponse, "$.id");
 
-        mockMvc.perform(get("/habits/" + id))
+        mockMvc.perform(get("/habits/" + id).header("X-User-Id", userId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.name").value("Meditate"));
+        mockMvc.perform(get("/habits/" + id).header("X-User-Id", UUID.randomUUID()))
+            .andExpect(status().isForbidden());
     }
 
     @Test
     void archivingSetsArchivedAt() throws Exception {
+        UUID userId = UUID.randomUUID();
         String createResponse = mockMvc.perform(post("/habits")
-                .header("X-User-Id", UUID.randomUUID())
+                .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Gym","scheduleType":"N_TIMES_PER_WEEK","timesPerWeek":3}
@@ -53,9 +57,36 @@ class HabitIntegrationTest extends AbstractIntegrationTest {
 
         String id = JsonPath.read(createResponse, "$.id");
 
-        mockMvc.perform(patch("/habits/" + id + "/archive"))
+        mockMvc.perform(patch("/habits/" + id + "/archive").header("X-User-Id", UUID.randomUUID()))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/habits/" + id + "/archive").header("X-User-Id", userId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.archivedAt").exists());
+    }
+
+    @Test
+    void anyCircleMemberCanArchiveAJointHabit() throws Exception {
+        UUID maya = UUID.randomUUID();
+        UUID dev = UUID.randomUUID();
+        String groupId = JsonPath.read(mockMvc.perform(post("/groups").header("X-User-Id", maya)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Flat 4B\",\"displayName\":\"Maya\"}"))
+            .andReturn().getResponse().getContentAsString(), "$.id");
+        mockMvc.perform(post("/groups/" + groupId + "/members").header("X-User-Id", maya)
+            .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\"" + dev + "\",\"displayName\":\"Dev\"}"));
+        String habitId = JsonPath.read(mockMvc.perform(post("/groups/" + groupId + "/habits").header("X-User-Id", maya)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Kitchen reset\",\"scheduleType\":\"DAILY\"}"))
+            .andReturn().getResponse().getContentAsString(), "$.id");
+
+        mockMvc.perform(patch("/habits/" + habitId + "/archive").header("X-User-Id", UUID.randomUUID()))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/habits/" + habitId + "/archive").header("X-User-Id", dev))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void aMissingOrMalformedUserIdIsA400() throws Exception {
+        mockMvc.perform(get("/habits")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/habits").header("X-User-Id", "not-a-uuid")).andExpect(status().isBadRequest());
     }
 
     @Test

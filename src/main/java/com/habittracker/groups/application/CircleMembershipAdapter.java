@@ -1,6 +1,6 @@
 package com.habittracker.groups.application;
 
-import com.habittracker.checkins.application.CircleMembership;
+import com.habittracker.habits.application.CircleMembership;
 import com.habittracker.groups.domain.Group;
 import com.habittracker.groups.domain.GroupRepository;
 import org.springframework.stereotype.Component;

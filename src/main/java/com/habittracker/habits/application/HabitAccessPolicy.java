@@ -1,4 +1,4 @@
-package com.habittracker.checkins.application;
+package com.habittracker.habits.application;
 
 import com.habittracker.common.domain.ForbiddenException;
 import com.habittracker.common.domain.NotFoundException;
@@ -43,6 +43,15 @@ public class HabitAccessPolicy {
                 : "Only members of the circle can check in to its joint habits");
         }
         return habit;
+    }
+
+    /** Archiving follows the same rule as checking in: the owner, or any member for a joint habit. */
+    public Habit requireCanArchive(UUID habitId, UUID userId) {
+        try {
+            return requireCheckInAllowed(habitId, userId);
+        } catch (ForbiddenException e) {
+            throw new ForbiddenException("Only the habit's owner (or, for a joint habit, its circle) can archive it");
+        }
     }
 
     public Habit requireViewable(UUID habitId, UUID viewerId) {

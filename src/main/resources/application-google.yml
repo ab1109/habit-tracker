@@ -1,0 +1,22 @@
+# Deployment profile: Google sign-in. Activate with SPRING_PROFILES_ACTIVE=google
+# and set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (see README, "Deploy").
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: openid, profile, email
+
+server:
+  # Behind a TLS-terminating proxy (Render, Fly, ...): trust X-Forwarded-* so
+  # the OAuth redirect URI and cookies use https and the public host name.
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      timeout: 30d
+      cookie:
+        secure: ${SESSION_COOKIE_SECURE:true}
+        same-site: lax

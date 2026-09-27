@@ -1,5 +1,6 @@
 package com.habittracker.checkins.api;
 
+import com.habittracker.common.api.CurrentUser;
 import com.habittracker.checkins.application.CheckInHistoryService;
 import com.habittracker.checkins.application.CheckInResult;
 import com.habittracker.checkins.application.CheckInService;
@@ -38,7 +39,7 @@ public class CheckInController {
     @PostMapping
     public ResponseEntity<CheckInResponse> recordCheckIn(
         @PathVariable UUID habitId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @RequestHeader("X-Timezone") String timezone
     ) {
         CheckInResult result = checkInService.recordCheckIn(habitId, userId, clock.instant(), ZoneId.of(timezone));
@@ -50,7 +51,7 @@ public class CheckInController {
     @DeleteMapping("/today")
     public ResponseEntity<Void> undoTodaysCheckIn(
         @PathVariable UUID habitId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @RequestHeader("X-Timezone") String timezone
     ) {
         checkInService.undoTodaysCheckIn(habitId, userId, clock.instant(), ZoneId.of(timezone));
@@ -60,7 +61,7 @@ public class CheckInController {
     @GetMapping
     public List<CheckInResponse> history(
         @PathVariable UUID habitId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {

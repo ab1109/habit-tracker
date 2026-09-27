@@ -1,5 +1,6 @@
 package com.habittracker.streaks.api;
 
+import com.habittracker.common.api.CurrentUser;
 import com.habittracker.checkins.domain.LocalDateResolver;
 import com.habittracker.habits.application.HabitService;
 import com.habittracker.streaks.application.HabitProgressService;
@@ -29,7 +30,7 @@ public class HabitProgressController {
     @GetMapping("/habits/{habitId}/progress")
     public HabitProgressResponse progress(
         @PathVariable UUID habitId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @RequestHeader("X-Timezone") String timezone
     ) {
         LocalDate today = LocalDateResolver.resolve(clock.instant(), ZoneId.of(timezone));

@@ -1,6 +1,9 @@
 // Thin fetch wrapper for the habit tracker REST API (same origin).
-// Every request carries X-User-Id and X-Timezone. Errors come back as {"message": "..."}.
-import { currentIdentity } from './identity.js';
+// Every request carries X-Timezone; X-User-Id only in DEV_HEADER mode (GOOGLE mode uses the
+// session cookie). Mutating requests carry X-XSRF-TOKEN from the XSRF-TOKEN cookie.
+// A 401 anywhere fires 'cohabit:unauthorized' so the app can show the sign-in screen.
+// Errors come back as {"message": "..."}.
+import { currentIdentity, isGoogleMode } from './identity.js';
 import { tz } from './dates.js';
 
 export class ApiError extends Error {
@@ -12,11 +15,23 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
-  const me = currentIdentity();
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+async function request(method, path, body, { quiet401 = false } = {}) {
   const headers = { Accept: 'application/json', 'X-Timezone': tz() };
-  if (me) headers['X-User-Id'] = me.id;
-  const init = { method, headers };
+  if (!isGoogleMode()) {
+    const me = currentIdentity();
+    if (me) headers['X-User-Id'] = me.id;
+  }
+  if (method !== 'GET' && method !== 'HEAD') {
+    const token = csrfToken(); // read at request time; it changes after sign-in
+    if (token) headers['X-XSRF-TOKEN'] = token;
+  }
+  const init = { method, headers, credentials: 'same-origin' };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
@@ -39,6 +54,9 @@ async function request(method, path, body) {
     }
   }
   if (!res.ok) {
+    if (res.status === 401 && !quiet401) {
+      window.dispatchEvent(new CustomEvent('cohabit:unauthorized'));
+    }
     const message = (data && typeof data === 'object' && data.message)
       || defaultMessage(res.status);
     throw new ApiError(res.status, message, data);
@@ -48,6 +66,7 @@ async function request(method, path, body) {
 
 function defaultMessage(status) {
   if (status === 400) return 'That request was not valid.';
+  if (status === 401) return 'Sign in required.';
   if (status === 403) return "You're not allowed to do that.";
   if (status === 404) return 'Not found.';
   return `Something went wrong (${status}).`;
@@ -58,6 +77,16 @@ const get = async (p) => (await request('GET', p)).data;
 const post = async (p, b) => (await request('POST', p, b)).data;
 
 export const api = {
+  // auth
+  authConfig: async () => (await request('GET', '/auth/config', undefined, { quiet401: true })).data,
+  me: async () => (await request('GET', '/me', undefined, { quiet401: true })).data,
+  logout: async () => (await request('POST', '/logout', undefined, { quiet401: true })).data,
+
+  // invite links
+  createInvite: (groupId) => post(`/groups/${enc(groupId)}/invites`),
+  getInvite: (token) => get(`/invites/${enc(token)}`),
+  acceptInvite: (token, displayName) => post(`/invites/${enc(token)}/accept`, { displayName }),
+
   // habits
   listHabits: () => get('/habits'),
   getHabit: (id) => get(`/habits/${enc(id)}`),

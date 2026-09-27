@@ -3,6 +3,7 @@ package com.habittracker.checkins.application;
 import com.habittracker.checkins.domain.CheckIn;
 import com.habittracker.checkins.domain.CheckInRepository;
 import com.habittracker.common.domain.DomainValidationException;
+import com.habittracker.habits.application.HabitAccessPolicy;
 import com.habittracker.habits.domain.Habit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -1,5 +1,6 @@
 package com.habittracker.notifications.api;
 
+import com.habittracker.common.api.CurrentUser;
 import com.habittracker.checkins.domain.LocalDateResolver;
 import com.habittracker.notifications.application.NotificationPreferencesService;
 import com.habittracker.notifications.application.WeeklyDigestService;
@@ -67,13 +68,13 @@ public class NotificationController {
     }
 
     @GetMapping("/me/notification-preferences")
-    public PreferencesBody preferences(@RequestHeader("X-User-Id") UUID userId) {
+    public PreferencesBody preferences(@CurrentUser UUID userId) {
         return PreferencesBody.from(preferencesService.preferencesOf(userId));
     }
 
     @PutMapping("/me/notification-preferences")
     public PreferencesBody updatePreferences(
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @Valid @RequestBody PreferencesBody body
     ) {
         NotificationPreferences updated = preferencesService.update(
@@ -82,14 +83,14 @@ public class NotificationController {
     }
 
     @GetMapping("/me/notifications")
-    public List<DeliveryResponse> notifications(@RequestHeader("X-User-Id") UUID userId) {
+    public List<DeliveryResponse> notifications(@CurrentUser UUID userId) {
         return preferencesService.deliveriesOf(userId).stream().map(DeliveryResponse::from).toList();
     }
 
     @GetMapping("/groups/{groupId}/digest")
     public DigestResponse digestPreview(
         @PathVariable UUID groupId,
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @RequestHeader("X-Timezone") String timezone
     ) {
         LocalDate today = LocalDateResolver.resolve(clock.instant(), ZoneId.of(timezone));

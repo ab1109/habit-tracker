@@ -11,9 +11,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * A circle of people. Membership rules: any member may add someone; a
- * member may remove themselves; the creator may remove anyone. There are
- * no other roles.
+ * A circle of people. Membership rules: any member may add someone or
+ * create an invite link; anyone holding a valid link may join; a member may
+ * remove themselves; the creator may remove anyone. There are no other roles.
  */
 public record Group(UUID id, String name, UUID createdBy, Instant createdAt, List<Member> members) {
 
@@ -48,6 +48,19 @@ public record Group(UUID id, String name, UUID createdBy, Instant createdAt, Lis
     /** Idempotent: adding someone who is already a member changes nothing. */
     public Group addMember(UUID requestedBy, UUID userId, String displayName) {
         requireMember(requestedBy);
+        if (isMember(userId)) {
+            return this;
+        }
+        List<Member> updated = new ArrayList<>(members);
+        updated.add(new Member(userId, displayName, Instant.now()));
+        return new Group(id, name, createdBy, createdAt, updated);
+    }
+
+    /**
+     * Joining through an invite link: the link itself is the permission, so
+     * the joiner needn't be a member yet. Idempotent.
+     */
+    public Group join(UUID userId, String displayName) {
         if (isMember(userId)) {
             return this;
         }

@@ -4,6 +4,8 @@ import com.habittracker.checkins.domain.CheckIn;
 import com.habittracker.checkins.domain.CheckInRepository;
 import com.habittracker.checkins.domain.LocalDateResolver;
 import com.habittracker.common.domain.ForbiddenException;
+import com.habittracker.habits.application.CircleMembership;
+import com.habittracker.habits.application.HabitAccessPolicy;
 import com.habittracker.common.domain.NotFoundException;
 import com.habittracker.common.domain.OwnerType;
 import com.habittracker.habits.domain.DailySchedule;

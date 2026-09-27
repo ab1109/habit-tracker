@@ -1,5 +1,6 @@
 package com.habittracker.habits.api;
 
+import com.habittracker.common.api.CurrentUser;
 import com.habittracker.common.domain.OwnerType;
 import com.habittracker.habits.application.HabitService;
 import com.habittracker.habits.domain.Habit;
@@ -10,7 +11,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,7 +30,7 @@ public class HabitController {
 
     @PostMapping
     public ResponseEntity<HabitResponse> createHabit(
-        @RequestHeader("X-User-Id") UUID userId,
+        @CurrentUser UUID userId,
         @Valid @RequestBody CreateHabitRequest request
     ) {
         Habit habit = habitService.createHabit(OwnerType.USER, userId, request.name(), request.toSchedule());
@@ -38,17 +38,17 @@ public class HabitController {
     }
 
     @GetMapping
-    public List<HabitResponse> myHabits(@RequestHeader("X-User-Id") UUID userId) {
+    public List<HabitResponse> myHabits(@CurrentUser UUID userId) {
         return habitService.activeHabitsOf(OwnerType.USER, userId).stream().map(HabitResponse::from).toList();
     }
 
     @GetMapping("/{id}")
-    public HabitResponse getHabit(@PathVariable UUID id) {
-        return HabitResponse.from(habitService.getHabit(id));
+    public HabitResponse getHabit(@PathVariable UUID id, @CurrentUser UUID userId) {
+        return HabitResponse.from(habitService.getHabit(id, userId));
     }
 
     @PatchMapping("/{id}/archive")
-    public HabitResponse archiveHabit(@PathVariable UUID id) {
-        return HabitResponse.from(habitService.archiveHabit(id));
+    public HabitResponse archiveHabit(@PathVariable UUID id, @CurrentUser UUID userId) {
+        return HabitResponse.from(habitService.archiveHabit(id, userId));
     }
 }

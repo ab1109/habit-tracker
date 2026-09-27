@@ -79,6 +79,18 @@ Responsibilities:
 
 Notification delivery must not be required for recording a check-in successfully.
 
+### `users`
+
+Owns sign-in and accounts.
+
+Responsibilities:
+
+- Resolve who is calling each request (`@CurrentUser`), from a Google session or, in local development, the `X-User-Id` header.
+- Create one account per Google identity on first sign-in.
+- Configure web security (sessions, CSRF, which URLs are public).
+
+Other modules never read identity from requests themselves; they receive the caller's user id.
+
 ## Dependency Direction
 
 The application layer coordinates requests between modules. Domain rules stay in the module that owns them.
@@ -201,7 +213,7 @@ These choices should be made explicitly before the first implementation slice:
 Resolved open decisions, recorded as each slice settled them.
 
 - **Language, framework, database, migrations:** Java 21, Spring Boot 3.5, PostgreSQL 16, Flyway.
-- **Identity:** no authentication yet. The caller is identified by a trusted `X-User-Id` header.
+- **Identity:** two modes, chosen by Spring profile. Deployments run the `google` profile: users sign in with Google (OpenID Connect), the server keeps a session cookie, state-changing requests need a CSRF token (`XSRF-TOKEN` cookie echoed as `X-XSRF-TOKEN`), and the `users` module maps each Google subject to one stable user id (`users.google_subject` is unique). Without that profile (local development and tests), the `X-User-Id` header is trusted as-is, and the app logs a warning at startup. Controllers never read identity themselves: they take a `@CurrentUser UUID`, filled in by whichever mode is active. The Docker image defaults to the `google` profile.
 - **Timezone for check-ins:** supplied per request in the `X-Timezone` header (the client's IANA zone) and resolved to `local_date` once, at check-in time. Reads that depend on "today" (progress, streaks) also take `X-Timezone`, so progress is always relative to the viewer's current local date.
 - **Weeks:** ISO weeks, Monday to Sunday.
 - **Streak units:** daily habits count consecutive days; specific-weekday habits count consecutive *scheduled* days (other days are skipped, and check-ins on them don't count); N-times-per-week habits count consecutive weeks with at least N distinct check-in days.
@@ -209,8 +221,8 @@ Resolved open decisions, recorded as each slice settled them.
 - **Weekly progress:** a week's target is 7 for daily habits, N for N-times-per-week, and the number of chosen weekdays for specific-weekday habits; `done` is capped at the target.
 - **Idempotent insert:** check-ins are written with `INSERT ... ON CONFLICT DO NOTHING`. A raised unique violation would abort the PostgreSQL transaction and make it impossible to return the winning row; with `ON CONFLICT` the losing request waits for the winner to commit, skips its insert, and reads the winner.
 - **Groups ("circles"):** a habit relates to a circle in one of two ways. A *shared* habit stays personal (its owner's check-ins and streak) and is only made visible to the circle. A *joint* habit is owned by the circle (`owner_type = GROUP`); one check-in by any member covers that local date for everyone (`uq_checkins_group`), with the date resolved in the performing member's timezone.
-- **Membership rules:** the creator is the first member; any member may add someone; a member may leave; only the creator may remove others. There are no other roles. Leaving a circle unshares the leaver's habits from it. Display names are per circle, since there is no user profile yet.
-- **Access:** a personal habit can be checked in to only by its owner, and viewed by its owner and members of circles it is shared with. A joint habit can be checked in to and viewed by members of its circle. `checkins` declares the `CircleMembership` port and `groups` implements it, so `checkins` never depends on `groups`.
+- **Membership rules:** the creator is the first member; any member may add someone or create an **invite link** (a random 32-byte token, valid for 7 days, usable any number of times; holding it is the permission to join); a member may leave; only the creator may remove others. There are no other roles. Leaving a circle unshares the leaver's habits from it. Display names are per circle, since there is no user profile yet.
+- **Access:** the rules live in `habits.application.HabitAccessPolicy`, and `habits` declares the `CircleMembership` port that `groups` implements. A personal habit can be checked in to, unchecked and archived only by its owner, and viewed by its owner and members of circles it is shared with. A joint habit can be checked in to, archived and viewed by any member of its circle, but only the member who checked in can undo that day's check-in. `habits` never depends on `groups`.
 - **Group progress:** computed per request from each shared and joint habit's derived progress for the viewer's current ISO week. Nothing is cached.
 - **Notifications:** the first workflow is a weekly digest per circle, sent Sunday from 18:00 in each member's preferred timezone (`notification_preferences`, default enabled and UTC). An hourly job builds it read-only from derived group progress and records every attempt in `notification_deliveries`. A partial unique index on `(user, circle, kind, week) WHERE status = 'SENT'` keeps re-runs from sending twice. Delivery is at-least-once, and one recipient's failure is recorded without stopping the others.
 - **Delivery mechanism:** `LoggingNotificationSender` writes to the application log behind the `NotificationSender` port. Users read their digests through `GET /me/notifications`. Email or push can replace it once users have a contact address.

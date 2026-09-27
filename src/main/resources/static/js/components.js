@@ -1,9 +1,9 @@
 // Shared page pieces and the create/share/invite dialogs used by several views.
-import { h, icon, openModal, field, toast, famClass, famFor } from './ui.js';
+import { h, icon, openModal, field, toast, famClass, famFor, copyText, toastError } from './ui.js';
 import { api } from './api.js';
-import { WEEKDAYS, SHORT_DAYS } from './dates.js';
+import { WEEKDAYS, SHORT_DAYS, dateTime } from './dates.js';
 import { themeSwitch } from './theme.js';
-import { currentIdentity, UUID_RE } from './identity.js';
+import { currentIdentity, UUID_RE, isGoogleMode } from './identity.js';
 
 export function groupsChanged() {
   window.dispatchEvent(new CustomEvent('cohabit:groups-changed'));
@@ -166,25 +166,69 @@ export function openNewCircle() {
   });
 }
 
+export function inviteUrl(token) {
+  return `${location.origin}${location.pathname}#/join/${encodeURIComponent(token)}`;
+}
+
+/**
+ * Invite dialog: create a shareable, multi-use invite link (both modes). In DEV_HEADER mode the
+ * old "add by user id" form sits below the link.
+ */
 export function openInvite(group, onDone) {
+  const dev = !isGoogleMode();
+  const linkArea = h('div');
+
+  const createBtn = h('button', { type: 'button', class: 'btn btn-primary' }, 'Create invite link');
+  createBtn.addEventListener('click', async () => {
+    createBtn.disabled = true;
+    try {
+      const inv = await api.createInvite(group.id);
+      const url = inviteUrl(inv.token);
+      const copyBtn = h('button', {
+        type: 'button', class: 'btn btn-secondary btn-sm',
+        onclick: async () => {
+          const ok = await copyText(url);
+          toast(ok ? 'Invite link copied' : 'Could not copy. Select the link and copy it by hand.', ok ? 'success' : 'error');
+        },
+      }, icon('copy', 15), 'Copy');
+      linkArea.replaceChildren(
+        h('div', { class: 'id-box invite-link' }, h('code', { class: 'mono' }, url), copyBtn),
+        h('div', { class: 'field-hint' },
+          `Anyone with this link can join ${group.name} until ${dateTime(inv.expiresAt)}.`));
+      createBtn.textContent = 'Create a new link';
+      createBtn.className = 'btn btn-secondary btn-sm';
+      copyBtn.focus();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      createBtn.disabled = false;
+    }
+  });
+
   const uid = h('input', { class: 'input mono', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', autocomplete: 'off', spellcheck: 'false' });
   const display = h('input', { class: 'input', placeholder: 'Dev Kapoor', maxlength: '60', autocomplete: 'off' });
+
   openModal({
     title: `Invite someone to ${group.name}`,
-    sub: 'There are no accounts yet, so invites go by user id. Ask them to copy theirs from their profile menu.',
+    sub: 'Send them a link. It works for anyone, as many times as you like, for seven days.',
     content: h('div', null,
-      field('Their user id', uid),
-      field('Their name in this circle', display)),
-    submitLabel: 'Invite',
+      h('div', { class: 'field' },
+        h('span', { class: 'label' }, 'Invite link'),
+        linkArea,
+        h('div', { class: 'row mt-12' }, createBtn)),
+      dev ? h('div', { class: 'or-divider' }, h('span', null, 'or add by user id')) : null,
+      dev ? field('Their user id', uid, 'Dev mode: they can copy it from their profile menu.') : null,
+      dev ? field('Their name in this circle', display) : null),
+    submitLabel: dev ? 'Add by id' : null,
     fam: famFor(group.id),
-    onSubmit: async () => {
+    onSubmit: dev ? async () => {
       const id = uid.value.trim().toLowerCase();
       if (!UUID_RE.test(id)) throw new Error('That does not look like a user id (a UUID).');
       if (!display.value.trim()) throw new Error('Add a display name for them.');
       await api.invite(group.id, id, display.value.trim());
       toast(`${display.value.trim()} is in ${group.name}`, 'success');
       if (onDone) onDone();
-    },
+    } : null,
   });
 }
 

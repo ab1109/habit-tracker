@@ -1,20 +1,65 @@
-// Entry point: identity setup, app shell (sidebar + mobile bar), profile menu and hash router.
-import { h, icon, avatar, famClass, famFor, openModal, toast, copyText, loadingState, inlineError, field } from './ui.js';
+// Entry point: auth mode (GET /auth/config), landing / sign-in, local identity setup (DEV_HEADER),
+// app shell (sidebar + mobile bar), profile menu and hash router.
+import { h, icon, avatar, famClass, famFor, openModal, toast, toastError, copyText, loadingState, inlineError, field } from './ui.js';
 import { api } from './api.js';
 import { tz } from './dates.js';
 import { applyTheme } from './theme.js';
-import { identities, currentIdentity, createIdentity, switchIdentity } from './identity.js';
+import {
+  identities, currentIdentity, createIdentity, switchIdentity, clearCurrentIdentity,
+  setAuthConfig, isGoogleMode, getLoginUrl, setSessionUser, savePendingJoin, takePendingJoin,
+} from './identity.js';
 import { openNewCircle, pageHead } from './components.js';
 import { renderToday } from './views/today.js';
 import { renderHabit } from './views/habit.js';
 import { renderCircle } from './views/circle.js';
 import { renderJoint } from './views/joint.js';
 import { renderNotifications } from './views/notifications.js';
+import { renderJoin } from './views/join.js';
+import { renderLanding } from './views/landing.js';
 
 const root = document.getElementById('app');
 let shell = null;
 let groupsCache = [];
 let renderToken = 0;
+let screen = 'boot'; // 'boot' | 'landing' | 'setup' | 'app'
+
+const JOIN_RE = /^#\/join\/([^/?]+)$/;
+function joinTokenFromHash() {
+  const m = (location.hash || '').match(JOIN_RE);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+// ---------- landing (GOOGLE signed-out = sign-in screen; DEV_HEADER before any identity) ----------
+function showLanding() {
+  shell = null;
+  screen = 'landing';
+  const google = isGoogleMode();
+  const token = joinTokenFromHash();
+  // Google sign-in comes back to '/', so remember the invite across the round trip.
+  if (token && google) savePendingJoin(token);
+  root.className = '';
+  document.title = 'Cohabit · Habit tracking, together';
+  root.replaceChildren(renderLanding({
+    google,
+    loginUrl: getLoginUrl(),
+    invited: !!token,
+    onStart: () => showSetup({ fromLanding: true }),
+  }));
+  window.scrollTo(0, 0);
+}
+
+function showBootError(err) {
+  shell = null;
+  screen = 'boot';
+  root.className = '';
+  root.replaceChildren(h('div', { class: 'setup' },
+    h('div', { class: 'setup-card' },
+      brand(),
+      h('h1', { class: 'title' }, 'Can’t reach Cohabit'),
+      h('div', { class: 'mt-16' }, inlineError(err && err.message ? err.message : String(err))),
+      h('div', { class: 'row mt-20' }, h('button', { type: 'button', class: 'btn btn-primary', onclick: boot }, 'Try again')))));
+}
 
 // ---------- identity setup ----------
 function brand(small) {
@@ -23,8 +68,9 @@ function brand(small) {
     h('span', { class: 'brand-name', style: small ? 'font-size:18px' : null }, 'Cohabit'));
 }
 
-function showSetup({ cancelable = false } = {}) {
+function showSetup({ cancelable = false, fromLanding = false } = {}) {
   shell = null;
+  screen = 'setup';
   const known = identities();
   const current = currentIdentity();
   const nameInput = h('input', { class: 'input', placeholder: 'Maya Rao', maxlength: '60', autocomplete: 'name' });
@@ -45,7 +91,7 @@ function showSetup({ cancelable = false } = {}) {
       h('button', { type: 'submit', class: 'btn btn-primary' }, 'Continue'),
       cancelable && current
         ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => { buildShell(); route(true); } }, `Back to ${current.name}`)
-        : null),
+        : fromLanding ? h('button', { type: 'button', class: 'btn btn-secondary', onclick: showLanding }, 'Back') : null),
     known.length && !cancelable
       ? h('div', { class: 'mt-20' },
         h('p', { class: 'side-label' }, 'Or continue as'),
@@ -83,15 +129,55 @@ function showSetup({ cancelable = false } = {}) {
 
 function enterApp() {
   buildShell();
-  if (location.hash === '' || location.hash === '#' || location.hash === '#/') route(true);
+  // Keep an invite link the visitor arrived with; otherwise start on Today.
+  if (joinTokenFromHash() || location.hash === '' || location.hash === '#' || location.hash === '#/') route(true);
   else location.hash = '#/';
 }
 
+// Log out. GOOGLE: POST /logout (CSRF header added by api.js) and drop the session user.
+// DEV_HEADER: clear the active identity but keep the saved list for the setup screen.
+async function logOut(modal) {
+  if (isGoogleMode()) {
+    try {
+      await api.logout();
+    } catch (e) {
+      if (e.status !== 401) { toastError(e); return; }
+    }
+    setSessionUser(null);
+  } else {
+    clearCurrentIdentity();
+  }
+  if (modal) modal.close();
+  groupsCache = [];
+  history.replaceState(null, '', location.pathname);
+  toast('Logged out');
+  showLanding();
+}
+
 // ---------- profile menu ----------
+function logoutButton(getModal) {
+  return h('div', { class: 'profile-logout' },
+    h('button', { type: 'button', class: 'btn btn-danger', style: 'width:100%', onclick: () => logOut(getModal()) }, 'Log out'));
+}
+
 function openProfile() {
   const me = currentIdentity();
   if (!me) return;
   let modal;
+  if (isGoogleMode()) {
+    modal = openModal({
+      title: 'Profile',
+      content: h('div', null,
+        h('div', { class: 'row', style: 'flex-wrap:nowrap' },
+          avatar(me.name, me.id, 'lg'),
+          h('div', { style: 'min-width:0' },
+            h('div', { class: 'member-name' }, me.name),
+            me.email ? h('div', { class: 'member-sub', style: 'overflow-wrap:anywhere' }, me.email) : null,
+            h('div', { class: 'member-sub' }, `Timezone ${tz()}`))),
+        logoutButton(() => modal)),
+    });
+    return;
+  }
   const copyBtn = h('button', {
     type: 'button', class: 'btn btn-secondary btn-sm',
     onclick: async () => {
@@ -128,7 +214,8 @@ function openProfile() {
         onclick: () => { modal.close(); showSetup({ cancelable: true }); },
       }, h('span', { class: 'avatar md' }, icon('plus', 15)),
       h('div', { class: 'grow' }, h('div', { class: 't' }, 'New identity'), h('div', { class: 's' }, 'Try a circle from both sides in one browser')))),
-    h('p', { class: 'hint mt-16' }, 'Identities live only in this browser. There are no passwords yet.'));
+    h('p', { class: 'hint mt-16' }, 'Identities live only in this browser. There are no passwords yet.'),
+    logoutButton(() => modal));
 
   modal = openModal({ title: 'Profile', content });
 }
@@ -143,11 +230,13 @@ function buildShell() {
   const circlesList = h('div', { class: 'side-circles' }, h('p', { class: 'side-empty' }, 'Loading…'));
   const main = h('main', { class: 'main', id: 'main', tabindex: '-1' });
 
-  const profileBtn = h('button', { type: 'button', class: 'profile-btn', onclick: openProfile, 'aria-label': 'Profile and switch user' },
+  const google = isGoogleMode();
+  const profileBtn = h('button', { type: 'button', class: 'profile-btn', onclick: openProfile, 'aria-label': google ? 'Profile and log out' : 'Profile and switch user' },
     avatar(me.name, me.id, 'md'),
     h('div', { style: 'min-width:0' },
       h('div', { class: 'profile-name' }, me.name),
-      h('div', { class: 'profile-sub' }, 'Profile · switch user')));
+      h('div', { class: 'profile-sub', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' },
+        google ? (me.email || 'Profile · log out') : 'Profile · switch user')));
 
   const sidebar = h('aside', { class: 'sidebar', 'aria-label': 'Navigation' },
     brand(),
@@ -173,6 +262,7 @@ function buildShell() {
   root.className = '';
   root.replaceChildren(app);
   shell = { app, main, sidebar, circlesList };
+  screen = 'app';
   loadSidebarGroups();
 }
 
@@ -214,6 +304,7 @@ const routes = [
   [/^#\/groups\/([^/?]+)$/, (m) => ({ key: 'group', gid: m[1], view: (ctx) => renderCircle(ctx, m[1]) })],
   [/^#\/groups\/([^/?]+)\/habits\/([^/?]+)$/, (m) => ({ key: 'joint', gid: m[1], view: (ctx) => renderJoint(ctx, m[1], m[2]) })],
   [/^#\/notifications$/, () => ({ key: 'notifications', view: (ctx) => renderNotifications(ctx) })],
+  [JOIN_RE, (m) => ({ key: 'join', view: (ctx) => renderJoin(ctx, m[1]) })],
 ];
 
 function matchRoute(hash) {
@@ -256,24 +347,71 @@ async function route(navigated) {
     const node = match
       ? await match.view(ctx)
       : errorPage({ status: 404, message: 'There is no page at this address.' });
-    if (token !== renderToken) return;
+    if (token !== renderToken || !shell) return;
     shell.main.replaceChildren(node);
   } catch (err) {
-    if (token !== renderToken) return;
+    if (token !== renderToken || !shell) return;
+    if (err && err.status === 401 && isGoogleMode()) return; // the sign-in screen takes over
     console.error(err);
     shell.main.replaceChildren(errorPage(err, () => route(true)));
   }
 }
 
 // ---------- boot ----------
-window.addEventListener('hashchange', () => route(true));
+window.addEventListener('hashchange', () => {
+  if (shell) { route(true); return; }
+  // Signed out / no identity: an invite link opened now should still be remembered.
+  if (screen === 'landing' && joinTokenFromHash()) showLanding();
+});
 window.addEventListener('cohabit:groups-changed', () => loadSidebarGroups());
+window.addEventListener('cohabit:unauthorized', () => {
+  if (!isGoogleMode()) {
+    toast('The server says you are not signed in.', 'error');
+    return;
+  }
+  if (screen === 'landing') return;
+  setSessionUser(null);
+  showLanding();
+});
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
-applyTheme();
-if (currentIdentity()) {
-  buildShell();
-  route(true);
-} else {
-  showSetup();
+async function boot() {
+  applyTheme();
+  screen = 'boot';
+  let cfg;
+  try {
+    cfg = await api.authConfig();
+  } catch (e) {
+    if (e.status === 0) { showBootError(e); return; }
+    cfg = { mode: 'DEV_HEADER', loginUrl: null }; // older backend without /auth/config
+  }
+  setAuthConfig(cfg);
+
+  if (isGoogleMode()) {
+    try {
+      setSessionUser(await api.me());
+    } catch (e) {
+      if (e.status === 401) { showLanding(); return; }
+      showBootError(e);
+      return;
+    }
+    if (!currentIdentity()) { showLanding(); return; }
+    // Back from Google sign-in (lands on '/'): resume a saved invite link.
+    const pending = takePendingJoin();
+    if (pending && !joinTokenFromHash()) {
+      history.replaceState(null, '', `${location.pathname}#/join/${encodeURIComponent(pending)}`);
+    }
+    buildShell();
+    route(true);
+    return;
+  }
+
+  if (currentIdentity()) {
+    buildShell();
+    route(true);
+  } else {
+    showLanding();
+  }
 }
+
+boot();

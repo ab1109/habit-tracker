@@ -1,7 +1,7 @@
 package com.habittracker.streaks.application;
 
 import com.habittracker.checkins.application.CheckInHistoryService;
-import com.habittracker.checkins.application.HabitAccessPolicy;
+import com.habittracker.habits.application.HabitAccessPolicy;
 import com.habittracker.habits.domain.Habit;
 import com.habittracker.streaks.domain.HabitProgress;
 import com.habittracker.streaks.domain.ProgressCalculator;

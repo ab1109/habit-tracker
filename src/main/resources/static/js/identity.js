@@ -1,4 +1,4 @@
-// Local, auth-free identity. Each browser can hold several identities so one person can demo
+// Identity. In DEV_HEADER mode: local, auth-free identities. Each browser can hold several identities so one person can demo
 // a circle by switching between users. Stored in localStorage; falls back to memory.
 
 const LIST_KEY = 'cohabit.identities';
@@ -35,7 +35,53 @@ function saveList(list) {
   write(LIST_KEY, JSON.stringify(list));
 }
 
+// ---------- auth mode ----------
+// DEV_HEADER: local identities below, sent as X-User-Id.
+// GOOGLE: identity is the server session; the signed-in user comes from GET /me.
+let mode = 'DEV_HEADER';
+let loginUrl = null;
+let sessionUser = null;
+
+export function setAuthConfig(cfg) {
+  mode = cfg && cfg.mode === 'GOOGLE' ? 'GOOGLE' : 'DEV_HEADER';
+  loginUrl = (cfg && cfg.loginUrl) || '/oauth2/authorization/google';
+}
+
+export function isGoogleMode() {
+  return mode === 'GOOGLE';
+}
+
+export function getLoginUrl() {
+  return loginUrl;
+}
+
+/** Store the GET /me response (or null when signed out). */
+export function setSessionUser(me) {
+  sessionUser = me && me.userId
+    ? { id: me.userId, name: me.displayName || (me.email ? me.email.split('@')[0] : 'You'), email: me.email || null }
+    : null;
+}
+
+// ---------- pending invite (survives the Google sign-in round trip) ----------
+const PENDING_KEY = 'cohabit.pendingJoin';
+
+export function savePendingJoin(token) {
+  try { sessionStorage.setItem(PENDING_KEY, token); } catch { /* ignore */ }
+}
+
+export function takePendingJoin() {
+  try {
+    const t = sessionStorage.getItem(PENDING_KEY);
+    if (t) sessionStorage.removeItem(PENDING_KEY);
+    return t;
+  } catch {
+    return null;
+  }
+}
+
+/** The current user as { id, name, email? } in either mode, or null. */
 export function currentIdentity() {
+  if (mode === 'GOOGLE') return sessionUser;
   const id = read(CURRENT_KEY);
   if (!id) return null;
   return identities().find((i) => i.id === id) || null;
@@ -71,6 +117,11 @@ export function createIdentity(name, existingId) {
 
 export function switchIdentity(id) {
   if (identities().some((i) => i.id === id)) write(CURRENT_KEY, id);
+}
+
+/** DEV_HEADER "Log out": forget which identity is active, keep the saved list. */
+export function clearCurrentIdentity() {
+  write(CURRENT_KEY, '');
 }
 
 export function forgetIdentity(id) {

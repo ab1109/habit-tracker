@@ -15,9 +15,11 @@ import java.util.UUID;
 public class HabitService {
 
     private final HabitRepository habitRepository;
+    private final HabitAccessPolicy accessPolicy;
 
-    public HabitService(HabitRepository habitRepository) {
+    public HabitService(HabitRepository habitRepository, HabitAccessPolicy accessPolicy) {
         this.habitRepository = habitRepository;
+        this.accessPolicy = accessPolicy;
     }
 
     @Transactional
@@ -26,6 +28,13 @@ public class HabitService {
         return habitRepository.save(habit);
     }
 
+    /** For API callers: the habit, if {@code viewerId} may see it. */
+    @Transactional(readOnly = true)
+    public Habit getHabit(UUID id, UUID viewerId) {
+        return accessPolicy.requireViewable(id, viewerId);
+    }
+
+    /** For other modules that have already authorized access (or need none). */
     @Transactional(readOnly = true)
     public Habit getHabit(UUID id) {
         return habitRepository.findById(id)
@@ -38,8 +47,8 @@ public class HabitService {
     }
 
     @Transactional
-    public Habit archiveHabit(UUID id) {
-        Habit habit = getHabit(id);
+    public Habit archiveHabit(UUID id, UUID requestedBy) {
+        Habit habit = accessPolicy.requireCanArchive(id, requestedBy);
         return habitRepository.save(habit.archive());
     }
 }
