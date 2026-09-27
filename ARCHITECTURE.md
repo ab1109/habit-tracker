@@ -195,3 +195,16 @@ These choices should be made explicitly before the first implementation slice:
 - Exact semantics of a current incomplete period in streak calculations.
 - Whether domain events are persisted or are initially dispatched in-process.
 - Initial notification delivery mechanism.
+
+## Decisions Made
+
+Resolved open decisions, recorded as each slice settled them.
+
+- **Language, framework, database, migrations:** Java 21, Spring Boot 3.5, PostgreSQL 16, Flyway.
+- **Identity:** no authentication yet. The caller is identified by a trusted `X-User-Id` header.
+- **Timezone for check-ins:** supplied per request in the `X-Timezone` header (the client's IANA zone) and resolved to `local_date` once, at check-in time. Reads that depend on "today" (progress, streaks) also take `X-Timezone`, so progress is always relative to the viewer's current local date.
+- **Weeks:** ISO weeks, Monday to Sunday.
+- **Streak units:** daily habits count consecutive days; specific-weekday habits count consecutive *scheduled* days (other days are skipped, and check-ins on them don't count); N-times-per-week habits count consecutive weeks with at least N distinct check-in days.
+- **Current incomplete period:** if today (or this week, for weekly habits) is already satisfied it counts toward the streak; otherwise it is *open* and the streak runs through the previous period without being broken. Check-ins dated after the viewer's today are ignored.
+- **Weekly progress:** a week's target is 7 for daily habits, N for N-times-per-week, and the number of chosen weekdays for specific-weekday habits; `done` is capped at the target.
+- **Access:** only a personal habit's owner may check in to it or read its history and progress (extended to circles in slice 4).

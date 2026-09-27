@@ -4,6 +4,7 @@ import com.habittracker.checkins.domain.CheckIn;
 import com.habittracker.checkins.domain.CheckInRepository;
 import com.habittracker.checkins.domain.DuplicateCheckInException;
 import com.habittracker.checkins.domain.LocalDateResolver;
+import com.habittracker.common.domain.ForbiddenException;
 import com.habittracker.common.domain.NotFoundException;
 import com.habittracker.common.domain.OwnerType;
 import com.habittracker.habits.domain.DailySchedule;
@@ -34,16 +35,30 @@ class CheckInServiceTest {
     @Mock
     private HabitRepository habitRepository;
 
+    private CheckInService service() {
+        return new CheckInService(checkInRepository, new HabitAccessPolicy(habitRepository));
+    }
+
     @Test
     void recordCheckInThrowsNotFoundWhenHabitDoesNotExist() {
         UUID habitId = UUID.randomUUID();
         when(habitRepository.findById(habitId)).thenReturn(Optional.empty());
 
-        CheckInService service = new CheckInService(checkInRepository, habitRepository);
+        CheckInService service = service();
 
         assertThatThrownBy(() ->
             service.recordCheckIn(habitId, UUID.randomUUID(), Instant.now(), ZoneId.of("UTC"))
         ).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void onlyTheOwnerCanCheckInToAPersonalHabit() {
+        Habit habit = Habit.create(OwnerType.USER, UUID.randomUUID(), "Meditate", new DailySchedule());
+        when(habitRepository.findById(habit.id())).thenReturn(Optional.of(habit));
+
+        assertThatThrownBy(() ->
+            service().recordCheckIn(habit.id(), UUID.randomUUID(), Instant.now(), ZoneId.of("UTC"))
+        ).isInstanceOf(ForbiddenException.class);
     }
 
     @Test
@@ -67,7 +82,7 @@ class CheckInServiceTest {
         when(checkInRepository.save(any(CheckIn.class)))
             .thenThrow(new DuplicateCheckInException("already exists", new RuntimeException("constraint violation")));
 
-        CheckInService service = new CheckInService(checkInRepository, habitRepository);
+        CheckInService service = service();
         CheckInResult result = service.recordCheckIn(habitId, userId, now, utc);
 
         assertThat(result.alreadyExisted()).isTrue();

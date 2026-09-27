@@ -8,6 +8,7 @@ import com.habittracker.habits.domain.Schedule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -29,6 +30,11 @@ public class HabitService {
     public Habit getHabit(UUID id) {
         return habitRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Habit not found: " + id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Habit> activeHabitsOf(OwnerType ownerType, UUID ownerId) {
+        return habitRepository.findActiveByOwner(ownerType, ownerId);
     }
 
     @Transactional

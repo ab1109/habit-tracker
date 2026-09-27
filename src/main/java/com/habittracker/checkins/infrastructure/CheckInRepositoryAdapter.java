@@ -7,6 +7,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,5 +40,17 @@ class CheckInRepositoryAdapter implements CheckInRepository {
     public Optional<CheckIn> findExisting(UUID habitId, UUID userId, LocalDate localDate) {
         return springDataRepository.findByHabitIdAndUserIdAndLocalDateAndGroupIdIsNull(habitId, userId, localDate)
             .map(mapper::toDomain);
+    }
+
+    @Override
+    public List<CheckIn> findIndividualHistory(UUID habitId, UUID userId, LocalDate from, LocalDate to) {
+        return springDataRepository
+            .findByHabitIdAndUserIdAndGroupIdIsNullAndLocalDateBetweenOrderByLocalDate(habitId, userId, from, to)
+            .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public List<LocalDate> findIndividualDates(UUID habitId, UUID userId) {
+        return springDataRepository.findIndividualDates(habitId, userId);
     }
 }

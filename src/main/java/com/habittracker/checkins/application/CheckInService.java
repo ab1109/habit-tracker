@@ -4,8 +4,6 @@ import com.habittracker.checkins.domain.CheckIn;
 import com.habittracker.checkins.domain.CheckInRepository;
 import com.habittracker.checkins.domain.DuplicateCheckInException;
 import com.habittracker.checkins.domain.LocalDateResolver;
-import com.habittracker.common.domain.NotFoundException;
-import com.habittracker.habits.domain.HabitRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,17 +17,16 @@ import java.util.UUID;
 public class CheckInService {
 
     private final CheckInRepository checkInRepository;
-    private final HabitRepository habitRepository;
+    private final HabitAccessPolicy accessPolicy;
 
-    public CheckInService(CheckInRepository checkInRepository, HabitRepository habitRepository) {
+    public CheckInService(CheckInRepository checkInRepository, HabitAccessPolicy accessPolicy) {
         this.checkInRepository = checkInRepository;
-        this.habitRepository = habitRepository;
+        this.accessPolicy = accessPolicy;
     }
 
     @Transactional
     public CheckInResult recordCheckIn(UUID habitId, UUID userId, Instant recordedAt, ZoneId timezone) {
-        habitRepository.findById(habitId)
-            .orElseThrow(() -> new NotFoundException("Habit not found: " + habitId));
+        accessPolicy.requireCheckInAllowed(habitId, userId);
 
         LocalDate localDate = LocalDateResolver.resolve(recordedAt, timezone);
 

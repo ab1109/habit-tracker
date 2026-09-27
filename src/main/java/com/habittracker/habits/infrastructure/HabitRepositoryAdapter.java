@@ -1,9 +1,11 @@
 package com.habittracker.habits.infrastructure;
 
+import com.habittracker.common.domain.OwnerType;
 import com.habittracker.habits.domain.Habit;
 import com.habittracker.habits.domain.HabitRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,5 +29,11 @@ class HabitRepositoryAdapter implements HabitRepository {
     @Override
     public Optional<Habit> findById(UUID id) {
         return springDataRepository.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<Habit> findActiveByOwner(OwnerType ownerType, UUID ownerId) {
+        return springDataRepository.findByOwnerTypeAndOwnerIdAndArchivedAtIsNullOrderByCreatedAt(ownerType.name(), ownerId)
+            .stream().map(mapper::toDomain).toList();
     }
 }

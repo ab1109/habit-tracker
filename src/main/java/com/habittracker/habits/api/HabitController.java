@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -34,6 +35,11 @@ public class HabitController {
     ) {
         Habit habit = habitService.createHabit(OwnerType.USER, userId, request.name(), request.toSchedule());
         return ResponseEntity.created(URI.create("/habits/" + habit.id())).body(HabitResponse.from(habit));
+    }
+
+    @GetMapping
+    public List<HabitResponse> myHabits(@RequestHeader("X-User-Id") UUID userId) {
+        return habitService.activeHabitsOf(OwnerType.USER, userId).stream().map(HabitResponse::from).toList();
     }
 
     @GetMapping("/{id}")
