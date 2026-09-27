@@ -36,6 +36,12 @@ public class GroupService {
         return groupRepository.findByMember(userId);
     }
 
+    /** Every circle, unfiltered — for system workflows such as the weekly digest, never for API callers. */
+    @Transactional(readOnly = true)
+    public List<Group> allGroups() {
+        return groupRepository.findAll();
+    }
+
     @Transactional(readOnly = true)
     public Group getGroup(UUID groupId, UUID viewerId) {
         Group group = load(groupId);
