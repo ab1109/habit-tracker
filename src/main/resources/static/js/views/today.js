@@ -1,5 +1,5 @@
 // Today (#/): personal habits with this week's marks, check-in, weekly ring, circles and activity.
-import { h, icon, avatar, famClass, famFor, daySquares, capsules, bar, emptyState, toast, toastError } from '../ui.js';
+import { h, icon, avatar, famClass, famFor, daySquares, capsules, bar, emptyState, toast, toastError, confirmDialog } from '../ui.js';
 import { api } from '../api.js';
 import { currentIdentity } from '../identity.js';
 import { todayISO, mondayOf, addDays, dateRange, longDate, weekdayName, relative, tz, hourNow, SHORT_DAYS } from '../dates.js';
@@ -58,7 +58,25 @@ export async function renderToday(ctx) {
   const firstName = me.name.split(/\s+/)[0];
   document.title = 'Today · Cohabit';
 
-  async function checkIn(habit, btn) {
+  async function checkIn(habit, btn, checked) {
+    if (checked) {
+      const ok = await confirmDialog({
+        title: `Uncheck ${habit.name}?`,
+        text: 'This removes today’s check-in. You can check in again any time today.',
+        confirmLabel: 'Uncheck',
+      });
+      if (!ok) return;
+      btn.disabled = true;
+      try {
+        await api.undoCheckIn(habit.id);
+        toast(`Unchecked: ${habit.name}`);
+        ctx.rerender();
+      } catch (e) {
+        toastError(e);
+        btn.disabled = false;
+      }
+      return;
+    }
     btn.disabled = true;
     try {
       const r = await api.checkIn(habit.id);
@@ -97,11 +115,11 @@ export async function renderToday(ctx) {
       ? `${shared.map((g) => g.name).join(', ')} · shared for visibility`
       : 'Private · only you can see this';
     const btnLabel = checked
-      ? `${habit.name}: already checked in today`
+      ? `${habit.name}: checked in today. Click to uncheck`
       : scheduledToday ? `Check in ${habit.name} for today` : `Check in ${habit.name} (today is not a scheduled day)`;
     const btn = h('button', {
       type: 'button', class: `check-btn ${checked ? 'done' : ''}`, 'aria-label': btnLabel, title: btnLabel,
-      onclick: () => checkIn(habit, btn),
+      onclick: () => checkIn(habit, btn, checked),
     }, icon('check', 16, 2.4));
 
     return h('div', { class: `habit-row ${famClass(fam)}` },

@@ -51,6 +51,11 @@ class GroupIntegrationTest extends AbstractIntegrationTest {
                 .header("X-User-Id", stranger).header("X-Timezone", "UTC"))
             .andExpect(status().isForbidden());
 
+        // Dev can't erase Maya's coverage.
+        mockMvc.perform(delete("/habits/" + habitId + "/checkins/today")
+                .header("X-User-Id", dev).header("X-Timezone", "UTC"))
+            .andExpect(status().isForbidden());
+
         mockMvc.perform(get("/groups/" + groupId + "/progress")
                 .header("X-User-Id", dev).header("X-Timezone", "UTC"))
             .andExpect(status().isOk())

@@ -23,6 +23,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -81,6 +83,48 @@ class CheckInServiceTest {
 
         assertThat(result.alreadyExisted()).isTrue();
         assertThat(result.checkIn().performedByUserId()).isEqualTo(maya);
+    }
+
+    @Test
+    void undoingRemovesTodaysCheckIn() {
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-09-20T15:00:00Z");
+        Habit habit = Habit.create(OwnerType.USER, userId, "Meditate", new DailySchedule());
+        CheckIn mine = CheckIn.create(habit.id(), userId, now, LocalDate.of(2026, 9, 20));
+        when(habitRepository.findById(habit.id())).thenReturn(Optional.of(habit));
+        when(checkInRepository.findExisting(habit.id(), userId, LocalDate.of(2026, 9, 20))).thenReturn(Optional.of(mine));
+
+        assertThat(service().undoTodaysCheckIn(habit.id(), userId, now, ZoneId.of("UTC"))).isTrue();
+        verify(checkInRepository).delete(mine.id());
+    }
+
+    @Test
+    void undoingWhenNothingWasCheckedInIsANoOp() {
+        UUID userId = UUID.randomUUID();
+        Habit habit = Habit.create(OwnerType.USER, userId, "Meditate", new DailySchedule());
+        when(habitRepository.findById(habit.id())).thenReturn(Optional.of(habit));
+        when(checkInRepository.findExisting(any(), any(), any())).thenReturn(Optional.empty());
+
+        assertThat(service().undoTodaysCheckIn(habit.id(), userId, Instant.now(), ZoneId.of("UTC"))).isFalse();
+        verify(checkInRepository, never()).delete(any());
+    }
+
+    @Test
+    void aMemberCannotUndoAnotherMembersJointCheckIn() {
+        UUID groupId = UUID.randomUUID();
+        UUID maya = UUID.randomUUID();
+        UUID dev = UUID.randomUUID();
+        Instant now = Instant.parse("2026-09-20T15:00:00Z");
+        LocalDate today = LocalDate.of(2026, 9, 20);
+        Habit joint = Habit.create(OwnerType.GROUP, groupId, "Kitchen reset", new DailySchedule());
+        when(habitRepository.findById(joint.id())).thenReturn(Optional.of(joint));
+        when(circleMembership.isMember(groupId, dev)).thenReturn(true);
+        when(checkInRepository.findExistingJoint(joint.id(), groupId, today))
+            .thenReturn(Optional.of(CheckIn.createJoint(joint.id(), groupId, maya, now, today)));
+
+        assertThatThrownBy(() -> service().undoTodaysCheckIn(joint.id(), dev, now, ZoneId.of("UTC")))
+            .isInstanceOf(ForbiddenException.class);
+        verify(checkInRepository, never()).delete(any());
     }
 
     @Test

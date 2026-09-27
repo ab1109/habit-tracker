@@ -86,7 +86,8 @@ There is no login yet. On first load the app asks for a **display name**, then g
    - *N times a week* (for example 4)
    - *Chosen weekdays* (for example Mon/Wed/Fri)
 2. Click the round **check-in button** at the left of a habit. It turns done, and the streak and weekly count update.
-3. Click it again. The app says *"Already checked in today. Checking in again changed nothing."*: the server returned `200` and did not create a second record.
+3. **Checked in by mistake?** Click the done button again: the app asks *"Uncheck …?"*, and confirming removes today's check-in (the streak and weekly count go back). The same option is on the habit's detail page as **Checked in today · Uncheck**. Only today's check-in can be undone.
+   (Repeating a check-in never creates a duplicate. The server answers `200` with the existing record; section 5.1 shows how to see it with curl.)
 4. Check that a habit you haven't done today says **Today open** (or **This week open** for weekly habits), not missed.
 5. Check the weekday habit: days outside its schedule are shown as days off, and they never break the streak.
 6. A brand-new habit says **No streak yet** / **No weeks on target yet**; days before it was created are never counted as missed.
@@ -108,6 +109,7 @@ Use the **Profile · switch user** menu (bottom of the sidebar) to act as severa
    - Maya's shared habit and her progress are visible, but Dev cannot check in for her.
    - Open the joint habit and click **Check in for the group**. The app says *"Covered for the group"*.
 7. Switch to **Maya** and check in to the same joint habit. The app says *"Already covered — changed nothing"*, and the day still shows Dev as the one who covered it.
+   Maya gets no **Undo my check-in** link, because only the member who covered the day can undo it. Switch to Dev to see it.
 8. The circle page now shows the combined weekly count ("N of M across the circle"), the joint habit's *who covered it* split, and the activity feed.
 9. As Dev, **leave** the circle. Dev loses access, and any habits Dev shared disappear from the circle.
 
@@ -163,6 +165,9 @@ curl -s $BASE/habits -H "X-User-Id: $MAYA"                       # my active hab
 curl -s -w ' [%{http_code}]\n' -X POST $BASE/habits/$HID/checkins -H "X-User-Id: $MAYA" -H "X-Timezone: $ZONE"
 curl -s -w ' [%{http_code}]\n' -X POST $BASE/habits/$HID/checkins -H "X-User-Id: $MAYA" -H "X-Timezone: $ZONE"
 
+# Undo today's check-in (checked in by mistake): 204, and 204 again if there's nothing left to undo
+curl -s -w '[%{http_code}]\n' -X DELETE $BASE/habits/$HID/checkins/today -H "X-User-Id: $MAYA" -H "X-Timezone: $ZONE"
+
 # Someone else can't check in to Maya's habit (403)
 curl -s -w ' [%{http_code}]\n' -X POST $BASE/habits/$HID/checkins -H "X-User-Id: $DEV" -H "X-Timezone: $ZONE"
 
@@ -197,7 +202,8 @@ curl -s -o /dev/null -w '%{http_code}\n' $BASE/habits/$HID/progress -H "X-User-I
 JID=$(curl -s -X POST $BASE/groups/$GID/habits -H "X-User-Id: $MAYA" -H 'Content-Type: application/json' \
   -d '{"name":"Kitchen reset","scheduleType":"DAILY"}' | id)
 
-# Dev covers today (201); Maya's check-in then returns Dev's record (200, "already covered")
+# Dev covers today (201); Maya's check-in then returns Dev's record (200, "already covered").
+# Only Dev can undo it: DELETE .../checkins/today as Maya -> 403, as Dev -> 204.
 curl -s -w ' [%{http_code}]\n' -X POST $BASE/habits/$JID/checkins -H "X-User-Id: $DEV"  -H "X-Timezone: $ZONE"
 curl -s -w ' [%{http_code}]\n' -X POST $BASE/habits/$JID/checkins -H "X-User-Id: $MAYA" -H "X-Timezone: $ZONE"
 
@@ -263,6 +269,7 @@ In the browser, clear the site's local storage (or use a private window) to drop
 | `400 Unknown time-zone ID` | `X-Timezone` must be an IANA zone such as `Europe/London`, not an abbreviation like `IST` |
 | `403` on a habit or circle | Expected for non-owners and non-members; check which `X-User-Id` you're sending (in the UI: profile menu) |
 | UI shows stale data after switching users | Reload the page; each identity's data is fetched fresh |
+| A UI change isn't showing up | Restart the app (`Ctrl+C`, then `mvn spring-boot:run`) and hard-refresh the browser (`Cmd+Shift+R` / `Ctrl+Shift+R`); the browser caches the JS files |
 
 ---
 

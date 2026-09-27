@@ -3,6 +3,7 @@ package com.habittracker.checkins.application;
 import com.habittracker.checkins.domain.CheckIn;
 import com.habittracker.checkins.domain.CheckInRepository;
 import com.habittracker.checkins.domain.LocalDateResolver;
+import com.habittracker.common.domain.ForbiddenException;
 import com.habittracker.common.domain.OwnerType;
 import com.habittracker.habits.domain.Habit;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,33 @@ public class CheckInService {
      * For a joint habit the local date is resolved in the performing member's
      * timezone, and the check-in covers that day for the whole circle.
      */
+    /**
+     * Removes today's check-in (today in the caller's timezone), for when it
+     * was made by mistake. Only today's can be undone: check-ins are only ever
+     * recorded for "now", so past days aren't editable either way. On a joint
+     * habit only the member who checked in may undo it — nobody can erase
+     * someone else's coverage. Streaks need no adjustment: they're derived.
+     *
+     * @return false if there was nothing to undo
+     */
+    @Transactional
+    public boolean undoTodaysCheckIn(UUID habitId, UUID userId, Instant now, ZoneId timezone) {
+        Habit habit = accessPolicy.requireCheckInAllowed(habitId, userId);
+        LocalDate today = LocalDateResolver.resolve(now, timezone);
+
+        Optional<CheckIn> existing = habit.ownerType() == OwnerType.GROUP
+            ? checkInRepository.findExistingJoint(habitId, habit.ownerId(), today)
+            : checkInRepository.findExisting(habitId, userId, today);
+        if (existing.isEmpty()) {
+            return false;
+        }
+        if (!existing.get().performedByUserId().equals(userId)) {
+            throw new ForbiddenException("Only the member who checked in can undo it");
+        }
+        checkInRepository.delete(existing.get().id());
+        return true;
+    }
+
     @Transactional
     public CheckInResult recordCheckIn(UUID habitId, UUID userId, Instant recordedAt, ZoneId timezone) {
         Habit habit = accessPolicy.requireCheckInAllowed(habitId, userId);

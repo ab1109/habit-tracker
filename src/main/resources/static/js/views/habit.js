@@ -56,6 +56,24 @@ export async function renderHabit(ctx, id) {
     }
   }
 
+  async function doUndo(btn) {
+    const ok = await confirmDialog({
+      title: 'Uncheck today?',
+      text: 'This removes today’s check-in. You can check in again any time today.',
+      confirmLabel: 'Uncheck',
+    });
+    if (!ok) return;
+    btn.disabled = true;
+    try {
+      await api.undoCheckIn(habit.id);
+      toast('Today’s check-in removed');
+      ctx.rerender();
+    } catch (e) {
+      toastError(e);
+      btn.disabled = false;
+    }
+  }
+
   async function doArchive() {
     const ok = await confirmDialog({
       title: `Archive “${habit.name}”?`,
@@ -92,8 +110,9 @@ export async function renderHabit(ctx, id) {
 
   const checkBtn = h('button', {
     type: 'button', class: 'btn btn-card', style: 'height:48px',
-    onclick: () => doCheckIn(checkBtn),
-  }, dates.has(today) ? 'Checked in today' : 'Check in today');
+    onclick: () => (dates.has(today) ? doUndo(checkBtn) : doCheckIn(checkBtn)),
+    title: dates.has(today) ? 'Click to uncheck today' : undefined,
+  }, dates.has(today) ? 'Checked in today · Uncheck' : 'Check in today');
 
   const actions = isOwner && !archived ? [
     checkBtn,

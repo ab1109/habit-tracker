@@ -1,6 +1,6 @@
 // Joint habit (#/groups/{gid}/habits/{hid}): one row for the whole circle, filled with
 // whoever covered each day.
-import { h, avatar, famClass, famFor, initials, bar, chip, icon, toast, toastError } from '../ui.js';
+import { h, avatar, famClass, famFor, initials, bar, chip, icon, toast, toastError, confirmDialog } from '../ui.js';
 import { api } from '../api.js';
 import { currentIdentity } from '../identity.js';
 import {
@@ -54,6 +54,25 @@ export async function renderJoint(ctx, gid, hid) {
     }
   }
 
+  async function undo(btn) {
+    const ok = await confirmDialog({
+      title: 'Undo your check-in?',
+      text: 'Today goes back to uncovered, for the whole circle, until someone checks in.',
+      confirmLabel: 'Undo',
+    });
+    if (!ok) return;
+    btn.disabled = true;
+    try {
+      await api.undoCheckIn(hid);
+      lastTap.delete(hid);
+      toast('Check-in undone. Today is uncovered again.');
+      ctx.rerender();
+    } catch (e) {
+      toastError(e);
+      btn.disabled = false;
+    }
+  }
+
   const todayC = byDate.get(today);
   const scheduledToday = isScheduled(habit, today);
   const n = group.members.length;
@@ -78,6 +97,10 @@ export async function renderJoint(ctx, gid, hid) {
   }
 
   const btn = h('button', { type: 'button', class: 'btn btn-primary btn-lg', onclick: () => checkIn(btn) }, 'Check in for the group');
+  // Only the member who covered today can take it back.
+  const undoBtn = todayC && todayC.performedByUserId === me.id
+    ? h('button', { type: 'button', class: 'btn-link danger', onclick: () => undoBtn && undo(undoBtn) }, 'Undo my check-in')
+    : null;
   const hero = h('section', { class: `joint-hero ${famClass(fam)}` },
     h('div', { class: 'top' },
       h('div', null,
@@ -86,7 +109,7 @@ export async function renderJoint(ctx, gid, hid) {
         h('p', { class: 'desc' }, n > 1
           ? `One check-in from any of the ${numberWord(n)} of you closes the day for the whole circle.`
           : 'You’re the only member so far. Invite someone to share the load.')),
-      btn),
+      h('div', { class: 'stack', style: 'align-items:flex-end;gap:8px' }, btn, undoBtn)),
     h('div', { class: 'notice' }, icon('info', 18), h('p', null, noticeText)));
 
   // ----- this week -----

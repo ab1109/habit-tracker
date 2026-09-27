@@ -9,6 +9,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +37,44 @@ class CheckInIntegrationTest extends AbstractIntegrationTest {
                 .header("X-Timezone", "America/Los_Angeles"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(firstId));
+    }
+
+    @Test
+    void aMistakenCheckInCanBeUndoneAndMadeAgain() throws Exception {
+        UUID userId = UUID.randomUUID();
+        String habitId = createHabit(userId, "Meditate");
+
+        mockMvc.perform(post("/habits/" + habitId + "/checkins")
+                .header("X-User-Id", userId).header("X-Timezone", "UTC"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/habits/" + habitId + "/checkins/today")
+                .header("X-User-Id", userId).header("X-Timezone", "UTC"))
+            .andExpect(status().isNoContent());
+        mockMvc.perform(get("/habits/" + habitId + "/progress")
+                .header("X-User-Id", userId).header("X-Timezone", "UTC"))
+            .andExpect(jsonPath("$.currentPeriodMet").value(false))
+            .andExpect(jsonPath("$.currentStreak").value(0));
+
+        // Undoing again changes nothing; checking in again creates a fresh record.
+        mockMvc.perform(delete("/habits/" + habitId + "/checkins/today")
+                .header("X-User-Id", userId).header("X-Timezone", "UTC"))
+            .andExpect(status().isNoContent());
+        mockMvc.perform(post("/habits/" + habitId + "/checkins")
+                .header("X-User-Id", userId).header("X-Timezone", "UTC"))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    void someoneElseCannotUndoMyCheckIn() throws Exception {
+        UUID userId = UUID.randomUUID();
+        String habitId = createHabit(userId, "Meditate");
+        mockMvc.perform(post("/habits/" + habitId + "/checkins")
+            .header("X-User-Id", userId).header("X-Timezone", "UTC"));
+
+        mockMvc.perform(delete("/habits/" + habitId + "/checkins/today")
+                .header("X-User-Id", UUID.randomUUID()).header("X-Timezone", "UTC"))
+            .andExpect(status().isForbidden());
     }
 
     @Test

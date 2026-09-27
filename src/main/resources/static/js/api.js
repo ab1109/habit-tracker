@@ -69,6 +69,8 @@ export const api = {
     const r = await request('POST', `/habits/${enc(habitId)}/checkins`);
     return { created: r.status === 201, checkIn: r.data };
   },
+  // Removes today's check-in (made by mistake); 204 even if there was none.
+  undoCheckIn: async (habitId) => (await request('DELETE', `/habits/${enc(habitId)}/checkins/today`)).data,
   listCheckins: (habitId, from, to) =>
     get(`/habits/${enc(habitId)}/checkins?from=${enc(from)}&to=${enc(to)}`),
   progress: (habitId) => get(`/habits/${enc(habitId)}/progress`),

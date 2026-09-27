@@ -29,6 +29,11 @@ class CheckInRepositoryAdapter implements CheckInRepository {
     }
 
     @Override
+    public void delete(UUID checkInId) {
+        springDataRepository.deleteById(checkInId);
+    }
+
+    @Override
     public Optional<CheckIn> findExisting(UUID habitId, UUID userId, LocalDate localDate) {
         return springDataRepository.findByHabitIdAndUserIdAndLocalDateAndGroupIdIsNull(habitId, userId, localDate)
             .map(mapper::toDomain);

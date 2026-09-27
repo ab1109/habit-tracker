@@ -19,6 +19,8 @@ public interface CheckInRepository {
      */
     boolean insertIfAbsent(CheckIn checkIn);
 
+    void delete(UUID checkInId);
+
     Optional<CheckIn> findExisting(UUID habitId, UUID userId, LocalDate localDate);
 
     /** The joint check-in that already covers this day for the circle, if any. */
