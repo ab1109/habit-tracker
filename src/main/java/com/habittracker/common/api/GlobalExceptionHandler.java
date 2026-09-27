@@ -8,6 +8,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.time.DateTimeException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -19,6 +21,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(NotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError(e.getMessage()));
+    }
+
+    @ExceptionHandler(DateTimeException.class)
+    public ResponseEntity<ApiError> handleDateTimeException(DateTimeException e) {
+        return ResponseEntity.badRequest().body(new ApiError(e.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
