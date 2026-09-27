@@ -35,17 +35,8 @@ class CheckInJpaEntity {
     private LocalDate localDate;
 
     protected CheckInJpaEntity() {
-    }
-
-    CheckInJpaEntity(UUID id, UUID habitId, UUID groupId, UUID userId,
-                      UUID performedByUserId, Instant recordedAt, LocalDate localDate) {
-        this.id = id;
-        this.habitId = habitId;
-        this.groupId = groupId;
-        this.userId = userId;
-        this.performedByUserId = performedByUserId;
-        this.recordedAt = recordedAt;
-        this.localDate = localDate;
+        // Read-only mapping: rows are inserted with a native INSERT ... ON
+        // CONFLICT DO NOTHING (see CheckInJpaSpringDataRepository).
     }
 
     UUID getId() { return id; }

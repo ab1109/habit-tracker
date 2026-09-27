@@ -9,7 +9,9 @@ import java.util.UUID;
 public record CheckInResponse(
     UUID id,
     UUID habitId,
+    UUID groupId,
     UUID userId,
+    UUID performedByUserId,
     Instant recordedAt,
     LocalDate localDate
 ) {
@@ -18,7 +20,9 @@ public record CheckInResponse(
         return new CheckInResponse(
             checkIn.id(),
             checkIn.habitId(),
+            checkIn.groupId(),
             checkIn.userId(),
+            checkIn.performedByUserId(),
             checkIn.recordedAt(),
             checkIn.localDate()
         );

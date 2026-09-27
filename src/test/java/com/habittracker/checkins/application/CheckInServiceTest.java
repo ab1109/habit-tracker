@@ -2,7 +2,6 @@ package com.habittracker.checkins.application;
 
 import com.habittracker.checkins.domain.CheckIn;
 import com.habittracker.checkins.domain.CheckInRepository;
-import com.habittracker.checkins.domain.DuplicateCheckInException;
 import com.habittracker.checkins.domain.LocalDateResolver;
 import com.habittracker.common.domain.ForbiddenException;
 import com.habittracker.common.domain.NotFoundException;
@@ -35,8 +34,11 @@ class CheckInServiceTest {
     @Mock
     private HabitRepository habitRepository;
 
+    @Mock
+    private CircleMembership circleMembership;
+
     private CheckInService service() {
-        return new CheckInService(checkInRepository, new HabitAccessPolicy(habitRepository));
+        return new CheckInService(checkInRepository, new HabitAccessPolicy(habitRepository, circleMembership));
     }
 
     @Test
@@ -62,6 +64,37 @@ class CheckInServiceTest {
     }
 
     @Test
+    void aJointCheckInThatAnotherMemberAlreadyMadeReturnsTheirs() {
+        UUID groupId = UUID.randomUUID();
+        UUID maya = UUID.randomUUID();
+        UUID dev = UUID.randomUUID();
+        Instant now = Instant.parse("2026-09-20T15:00:00Z");
+        LocalDate today = LocalDate.of(2026, 9, 20);
+        Habit joint = Habit.create(OwnerType.GROUP, groupId, "Kitchen reset", new DailySchedule());
+        CheckIn mayas = CheckIn.createJoint(joint.id(), groupId, maya, now, today);
+
+        when(habitRepository.findById(joint.id())).thenReturn(Optional.of(joint));
+        when(circleMembership.isMember(groupId, dev)).thenReturn(true);
+        when(checkInRepository.findExistingJoint(joint.id(), groupId, today)).thenReturn(Optional.of(mayas));
+
+        CheckInResult result = service().recordCheckIn(joint.id(), dev, now, ZoneId.of("UTC"));
+
+        assertThat(result.alreadyExisted()).isTrue();
+        assertThat(result.checkIn().performedByUserId()).isEqualTo(maya);
+    }
+
+    @Test
+    void aNonMemberCannotCheckInToAJointHabit() {
+        UUID groupId = UUID.randomUUID();
+        Habit joint = Habit.create(OwnerType.GROUP, groupId, "Kitchen reset", new DailySchedule());
+        when(habitRepository.findById(joint.id())).thenReturn(Optional.of(joint));
+
+        assertThatThrownBy(() ->
+            service().recordCheckIn(joint.id(), UUID.randomUUID(), Instant.now(), ZoneId.of("UTC"))
+        ).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
     void aRacingDuplicateInsertStillReturnsTheWinningCheckIn() {
         UUID habitId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -79,8 +112,8 @@ class CheckInServiceTest {
             .thenReturn(Optional.empty())      // 1st call: the pre-check — nothing yet
             .thenReturn(Optional.of(winner));  // 2nd call: after losing the race
 
-        when(checkInRepository.save(any(CheckIn.class)))
-            .thenThrow(new DuplicateCheckInException("already exists", new RuntimeException("constraint violation")));
+        // The insert is skipped: the other request's row already holds the day.
+        when(checkInRepository.insertIfAbsent(any(CheckIn.class))).thenReturn(false);
 
         CheckInService service = service();
         CheckInResult result = service.recordCheckIn(habitId, userId, now, utc);
