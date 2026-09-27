@@ -1,0 +1,43 @@
+# Render Blueprint: one web service (this repo's Dockerfile) + one Postgres.
+# In Render: New > Blueprint > pick this repo. You'll be asked for the two
+# Google secrets (see README, "Deploy to Render").
+databases:
+  - name: cohabit-db
+    plan: free
+    databaseName: habit_tracker
+    user: habit_tracker
+
+services:
+  - type: web
+    name: cohabit
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /auth/config
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: google
+      - key: DB_HOST
+        fromDatabase:
+          name: cohabit-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: cohabit-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: cohabit-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: cohabit-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: cohabit-db
+          property: password
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
