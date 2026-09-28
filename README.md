@@ -2,6 +2,8 @@
 
 A collaborative habit tracker built as a modular monolith (Spring Boot + PostgreSQL). You define habits, record idempotent check-ins, see streaks derived from your history, share progress with small groups ("circles"), and get a weekly digest per circle.
 
+Live app link: https://cohabit-r62g.onrender.com
+
 - Design and module boundaries: [ARCHITECTURE.md](ARCHITECTURE.md). Its **Decisions Made** section covers streak rules, timezones and access rules.
 - Web UI: plain HTML/CSS/JS in [src/main/resources/static/](src/main/resources/static/), served by the same app at `/`.
 
